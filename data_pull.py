@@ -37,6 +37,7 @@ os.system('wget -P'+d1+' -p --convert-links https://dshs.texas.gov/coronavirus/T
 print('Getting WorldOMeter Data:')
 os.system('wget -P'+d1+' -p --convert-links https://www.worldometers.info/coronavirus/')
 
-        
+#TODO Get "Our World in Data" information as well. Ideas to do this, https://srome.github.io/Parsing-HTML-Tables-in-Python-with-BeautifulSoup-and-pandas/
+#TOSO parse georgia, and worldometer into csv files somehow. 
 
 
