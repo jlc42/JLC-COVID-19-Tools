@@ -5,12 +5,15 @@ import pandas as pd
 import numpy as np
 #import arviz as az
 from matplotlib import pyplot as plt
+from matplotlib.ticker import PercentFormatter
 #from covid.models.generative import GenerativeModel
 #from covid.data import summarize_inference_data
 
 from rt_live_covid_model.covid.data import get_and_process_covidtracking_data 
 from rt_live_covid_model.covid.data import summarize_inference_data
 from rt_live_covid_model.covid.data_us import get_raw_covidtracking_data
+import os
+import math
 
 
 idx = pd.IndexSlice
@@ -21,7 +24,7 @@ def process_covidtracking_data(data: pd.DataFrame, run_date: pd.Timestamp):
     data = data.rename(columns={"state": "region"})
     data["date"] = pd.to_datetime(data["date"], format="%Y%m%d")
     data = data.set_index(["region", "date"]).sort_index()
-    data = data[["positive", "total"]]
+    data = data[["positive", "total", "death","deathIncrease"]]
     
     # Too little data or unreliable reporting in the data source.
     data = data.drop(["MP", "GU", "AS", "PR", "VI"])
@@ -118,9 +121,10 @@ def process_covidtracking_data(data: pd.DataFrame, run_date: pd.Timestamp):
     
     # At the real time of `run_date`, the data for `run_date` is not yet available!
     # Cutting it away is important for backtesting!
-    return data.loc[idx[:, :(run_date - pd.DateOffset(1))], ["positive", "total"]]
+    return data.loc[idx[:, :(run_date - pd.DateOffset(1))], ["positive", "total", "death","deathIncrease"]]
 
-
+def roundup(x):
+    return int(math.ceil(x /100.0)) * 100
 
 run_date=pd.Timestamp.today()-pd.Timedelta(days=1)
 
@@ -129,13 +133,106 @@ rawData=get_raw_covidtracking_data()
 
 data = process_covidtracking_data(rawData,run_date)
 
+FIGUREPATH="../jlc42.github.io/figs/"
+
+os.system('mkdir '+FIGUREPATH+'casesNTests')
+os.system('mkdir '+FIGUREPATH+'percentViralTestsPositive')
+os.system('mkdir '+FIGUREPATH+'dailyDeaths')
+
+###Generate figures for each State: 
+regionList=data.index.get_level_values(0).drop_duplicates()
+for stateName in regionList:
+    print("Generating Figures for "+stateName)
+    state=data.loc[stateName]
+    
+    #Calculate Values of Use for later:
+    state['dailyNewCases-7DayAvg'] = state.iloc[:,0].rolling(window=7).mean()
+    state['dailyNewTests-7DayAvg'] = state.iloc[:,1].rolling(window=7).mean()
+    state['percentVTPositive'] = state['dailyNewCases-7DayAvg']/state['dailyNewTests-7DayAvg']
+    state['dailyDeaths-7DayAvg'] = state['deathIncrease'].rolling(window=7).mean()
+
+    
+    #CasesAndTests
+    maxCases=state['dailyNewCases-7DayAvg'].max()*10
+    maxTests=state['dailyNewTests-7DayAvg'].max()
+    axis2Max=roundup(max(maxCases,maxTests))
+    axis1Max=axis2Max/10
+
+    fig, ax1 = plt.subplots()
+    color = 'tab:orange'
+    plt.title(stateName+': Daily Cases and Tests')
+    ax1.set_xlabel('Date')
+    ax1.set_ylabel('Daily Cases', color=color)
+    ax1.plot(state['dailyNewCases-7DayAvg'], color=color)
+    ax1.tick_params(axis='y', labelcolor=color)
+    ax1.set_ylim(0,axis1Max)
+    ax1.grid(True)
+    plt.scatter(state.index,state['positive'], color=color, s=1, alpha=0.5)
+
+    ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+    color = 'tab:blue'
+    ax2.set_ylabel('Daily Tests', color=color)  # we already handled the x-label with ax1
+    ax2.plot(state['dailyNewTests-7DayAvg'], color=color)
+    ax2.tick_params(axis='y', labelcolor=color)
+    ax2.set_ylim(0,axis2Max)
+
+    fig.tight_layout(pad=2)  # otherwise the right y-label is slightly clipped
+    plt.scatter(state.index,state['total'], color=color, s=1, alpha=0.5)
+    
+    plt.savefig(FIGUREPATH + 'casesNTests/' + stateName +'-DailyCasesAndTests')
+    plt.close('all')
+
+    #%Positive
+    color = 'tab:blue'
+    ax = state['percentVTPositive'].plot(color=color)
+    ax.yaxis.set_major_formatter(PercentFormatter(xmax=1,decimals=0))
+    ax.grid(True)
+
+    plt.title(stateName+': Percent Viral Tests Positive')
+    plt.xlabel('Date')
+    plt.ylabel('% of Tests Positive', color=color)
+    plt.ylim(0,.3)
+    plt.tight_layout(pad=2)
+
+    plt.savefig(FIGUREPATH + 'percentViralTestsPositive/' + stateName +'-PercentViralTestsPositive')
+    plt.close('all')
+
+    #Daily Deaths
+    color = 'tab:red'
+    yAxisMax=state['dailyDeaths-7DayAvg'].max()
+    yAxisMax=math.ceil(yAxisMax*1.3)
+
+
+
+    ax = state['dailyDeaths-7DayAvg'].plot(color=color)
+    plt.scatter(state.index,state['deathIncrease'], color=color, s=1, alpha=0.5)
+    ax.grid(True)
+    ax.set_ylim(0,yAxisMax)
+    
+    plt.title(stateName+': Daily Deaths')
+    plt.xlabel('Date')
+    plt.ylabel('Daily Deaths', color=color)
+    plt.tight_layout(pad=2)
+    
+    plt.savefig(FIGUREPATH + 'dailyDeaths/' + stateName +'-DailyDeaths')
+    plt.close('all')
 
 
 
 
 
-###Display figure for New Mexico Cases and Tests###
 
+
+
+
+
+
+
+
+
+
+
+"""
 
 nm=data.loc['NM']
 nm['DailyNewCases-7DayAvg'] = nm.iloc[:,0].rolling(window=7).mean()
@@ -164,29 +261,6 @@ plt.scatter(nm.index,nm['total'], color=color, s=1, alpha=0.5)
 plt.savefig('NM: Daily Cases and Tests')
 plt.show()
 
+"""
 
 
-fig, ax1 = plt.subplots()
-color = 'tab:red'
-ax1.set_xlabel('Date')
-ax1.set_ylabel('Cases', color=color)
-ax1.plot(data.loc['NM','positive'], color=color)
-ax1.tick_params(axis='y', labelcolor=color)
-ax1.set_ylim(0,1200)
-
-ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
-
-color = 'tab:blue'
-ax2.set_ylabel('tests', color=color)  # we already handled the x-label with ax1
-ax2.plot(data.loc['NM','total'], color=color)
-ax2.tick_params(axis='y', labelcolor=color)
-ax2.set_ylim(0,12000)
-
-fig.tight_layout()  # otherwise the right y-label is slightly clipped
-plt.show()
-
-
-#plt.plot(data.loc['NM','positive'])
-#plt.show()
-
-plt.clf()
