@@ -138,6 +138,7 @@ FIGUREPATH="../jlc42.github.io/figs/"
 os.system('mkdir '+FIGUREPATH+'casesNTests')
 os.system('mkdir '+FIGUREPATH+'percentViralTestsPositive')
 os.system('mkdir '+FIGUREPATH+'dailyDeaths')
+os.system('mkdir '+FIGUREPATH+'estimatedInfections')
 
 ###Generate figures for each State: 
 regionList=data.index.get_level_values(0).drop_duplicates()
@@ -146,10 +147,11 @@ for stateName in regionList:
     state=data.loc[stateName]
     
     #Calculate Values of Use for later:
-    state['dailyNewCases-7DayAvg'] = state.iloc[:,0].rolling(window=7).mean()
-    state['dailyNewTests-7DayAvg'] = state.iloc[:,1].rolling(window=7).mean()
+    state['dailyNewCases-7DayAvg'] = state["positive"].rolling(window=7).mean()
+    state['dailyNewTests-7DayAvg'] = state["total"].rolling(window=7).mean()
     state['percentVTPositive'] = state['dailyNewCases-7DayAvg']/state['dailyNewTests-7DayAvg']
     state['dailyDeaths-7DayAvg'] = state['deathIncrease'].rolling(window=7).mean()
+    state['infFromCasesYYGEst'] = state['dailyNewCases-7DayAvg']*(16*(pow(state['percentVTPositive'],0.5))+2.5)
 
     
     #CasesAndTests
@@ -218,8 +220,29 @@ for stateName in regionList:
     plt.close('all')
 
 
+    #Infections Estimates:
+    casesColor = 'tab:blue'
+    yygColor = 'tab:green'
+    plt.title(stateName+': Estimated Infections')
+    plt.xlabel('Date')
+    plt.ylabel('Daily Cases')
+    plt.scatter(state.index,state['positive'], color=casesColor, s=1, alpha=0.5)
+    plt.plot(state.index,state['dailyNewCases-7DayAvg'], color=casesColor, label = 'confirmed cases')
+    #plt.scatter(state.index,state['dailyNewCases-7DayAvg'], color=casesColor)
+    plt.plot(state.index,state['infFromCasesYYGEst'], color=yygColor, label = 'estimated infections (from cases)')
+    plt.grid(True)
+    plt.legend()
+    fileName=FIGUREPATH + 'estimatedInfections/' + stateName +'-EstimatedInfections'
+    plt.savefig(fileName)
+    plt.close('all')
+    f=open(fileName+'.txt', "w")
+    description = """The true number of infections is far larger than the number of officially reported cases. One way to estimate the true number of infections from reported cases and the percent of tests that are positive was proposed by Youyang Gu: true-new-daily-infections = daily-confirmed-cases * (16 * (positivity-rate)^(0.5) + 2.5). (see: https://covid19-projections.com/estimating-true-infections/)"""
+    f.write(description)
+    f.close()
+    plt.close('all')
 
 
+#matplotlib filling and shading regions https://matplotlib.org/3.1.1/gallery/lines_bars_and_markers/fill_between_demo.html
 
 
 

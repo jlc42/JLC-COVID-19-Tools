@@ -47,20 +47,22 @@ gm.sample()
 
 result = summarize_inference_data(gm.inference_data)
 
+
+#make cases plot
 fig, ax = plt.subplots(figsize=(10,5))
 result.test_adjusted_positive.plot(c="g", label="Test-adjusted")
 result.test_adjusted_positive_raw.plot(c="g", alpha=.5, label="Test-adjusted (raw)", style="--")
-result.infections.plot(c="b", label="Infections")
+result.infections.plot(c="b", label="Implied Infections")
 gm.observed.positive.plot(c='r', alpha=.7, label="Reported Positives")
 fig.set_facecolor('w')
 ax.legend();
-
+ax.set_title(f"{region} rtLive Inferred Cases and Infections")
 plt.savefig(fname=region+"_cases.png")
 
 
 fig, ax = plt.subplots(figsize=(10,5))
 
-ax.set_title(f"{region} $R_t$")
+ax.set_title(f"{region} rtLive Algorithm Inferred $R_t$")
 samples = gm.trace['r_t']
 x=result.index
 cmap = plt.get_cmap("Reds")

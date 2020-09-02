@@ -25,6 +25,10 @@ print('Getting Covid-Tracking Data:')
 os.system('wget -P'+d1+' -p --convert-links https://covidtracking.com/api/v1/us/daily.csv')
 os.system('wget -P'+d1+' -p --convert-links https://covidtracking.com/api/v1/states/daily.csv')
 
+print('Getting rt.live results:')
+os.system('wget -P'+d1+' -p --convert-links https://d14wlfuexuxgcm.cloudfront.net/covid/rt.csv')
+
+
 print('Getting Georgia Data:')
 os.system('mkdir '+d1+'/GA')
 os.system('wget -P'+d1+'/GA/ -p --convert-links https://ga-covid19.ondemand.sas.com/')
