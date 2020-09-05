@@ -14,7 +14,10 @@ from rt_live_covid_model.covid.data import summarize_inference_data
 from rt_live_covid_model.covid.data_us import get_raw_covidtracking_data
 import os
 import math
+import sys
 
+region = sys.argv[1]
+option = sys.argv[2]
 
 idx = pd.IndexSlice
 
@@ -285,5 +288,4 @@ plt.savefig('NM: Daily Cases and Tests')
 plt.show()
 
 """
-
 

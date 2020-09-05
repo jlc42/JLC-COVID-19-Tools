@@ -55,8 +55,10 @@ result.test_adjusted_positive_raw.plot(c="g", alpha=.5, label="Test-adjusted (ra
 result.infections.plot(c="b", label="Implied Infections")
 gm.observed.positive.plot(c='r', alpha=.7, label="Reported Positives")
 fig.set_facecolor('w')
-ax.legend();
+ax.legend()
 ax.set_title(f"{region} rtLive Inferred Cases and Infections")
+ax.grid(True)
+fig.tight_layout(pad=2)
 plt.savefig(fname=region+"_cases.png")
 
 
@@ -80,6 +82,8 @@ for i, p in enumerate(percs[::-1]):
 
 ax.axhline(1.0, c="k", lw=1, linestyle="--")
 fig.set_facecolor('w')
+ax.grid(True)
+fig.tight_layout(pad=2)
 
 plt.savefig(fname=region+"_rt.png")
 
