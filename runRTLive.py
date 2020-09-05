@@ -14,6 +14,10 @@ import sys
 
 idx = pd.IndexSlice
 region = sys.argv[1]
+if len(sys.argv)>2:
+    outputPath = sys.argv[2]
+else:
+    outputPath = './'
 
 def get_raw_UScovidtracking_data():
     """ Gets the current daily CSV from COVIDTracking for the US as a whole"""
@@ -59,7 +63,7 @@ ax.legend()
 ax.set_title(f"{region} rtLive Inferred Cases and Infections")
 ax.grid(True)
 fig.tight_layout(pad=2)
-plt.savefig(fname=region+"_cases.png")
+plt.savefig(fname=outputPath+region+"_cases.png")
 
 
 fig, ax = plt.subplots(figsize=(10,5))
@@ -85,7 +89,7 @@ fig.set_facecolor('w')
 ax.grid(True)
 fig.tight_layout(pad=2)
 
-plt.savefig(fname=region+"_rt.png")
+plt.savefig(fname=outputPath+region+"_rt.png")
 
 
 

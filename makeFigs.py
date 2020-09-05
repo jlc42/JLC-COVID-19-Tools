@@ -16,8 +16,31 @@ import os
 import math
 import sys
 
-region = sys.argv[1]
-option = sys.argv[2]
+
+arglen=len(sys.argv)
+
+if arglen>1:
+    regionOption = sys.argv[1]
+else:
+    regionOptios == 'ALL'
+
+if arglen>2:
+    option = sys.argv[2]
+else:
+    option = '-limited'
+
+regionOption = regionOption.upper()
+
+print("making figures for region "+region)
+if option == '-a':
+    includeRT=True
+    print("including rt runs")
+else:
+    print("not including rt runs")
+    includeRT=False
+
+
+
 
 idx = pd.IndexSlice
 
@@ -145,9 +168,11 @@ os.system('mkdir '+FIGUREPATH+'estimatedInfections')
 
 ###Generate figures for each State: 
 regionList=data.index.get_level_values(0).drop_duplicates()
-for stateName in regionList:
-    print("Generating Figures for "+stateName)
-    state=data.loc[stateName]
+for region in regionList:
+    if (regionOption!=region) or (regionOption != 'all'):
+        break; 
+    print("Generating Figures for "+region)
+    state=data.loc[region]
     
     #Calculate Values of Use for later:
     state['dailyNewCases-7DayAvg'] = state["positive"].rolling(window=7).mean()
@@ -165,7 +190,7 @@ for stateName in regionList:
 
     fig, ax1 = plt.subplots()
     color = 'tab:orange'
-    plt.title(stateName+': Daily Cases and Tests')
+    plt.title(region+': Daily Cases and Tests')
     ax1.set_xlabel('Date')
     ax1.set_ylabel('Daily Cases', color=color)
     ax1.plot(state['dailyNewCases-7DayAvg'], color=color)
@@ -184,7 +209,7 @@ for stateName in regionList:
     fig.tight_layout(pad=2)  # otherwise the right y-label is slightly clipped
     plt.scatter(state.index,state['total'], color=color, s=1, alpha=0.5)
     
-    plt.savefig(FIGUREPATH + 'casesNTests/' + stateName +'-DailyCasesAndTests')
+    plt.savefig(FIGUREPATH + 'casesNTests/' + region +'-DailyCasesAndTests')
     plt.close('all')
 
     #%Positive
@@ -193,13 +218,13 @@ for stateName in regionList:
     ax.yaxis.set_major_formatter(PercentFormatter(xmax=1,decimals=0))
     ax.grid(True)
 
-    plt.title(stateName+': Percent Viral Tests Positive')
+    plt.title(region+': Percent Viral Tests Positive')
     plt.xlabel('Date')
     plt.ylabel('% of Tests Positive', color=color)
     plt.ylim(0,.3)
     plt.tight_layout(pad=2)
 
-    plt.savefig(FIGUREPATH + 'percentViralTestsPositive/' + stateName +'-PercentViralTestsPositive')
+    plt.savefig(FIGUREPATH + 'percentViralTestsPositive/' + region +'-PercentViralTestsPositive')
     plt.close('all')
 
     #Daily Deaths
@@ -214,19 +239,19 @@ for stateName in regionList:
     ax.grid(True)
     ax.set_ylim(0,yAxisMax)
     
-    plt.title(stateName+': Daily Deaths')
+    plt.title(region+': Daily Deaths')
     plt.xlabel('Date')
     plt.ylabel('Daily Deaths', color=color)
     plt.tight_layout(pad=2)
     
-    plt.savefig(FIGUREPATH + 'dailyDeaths/' + stateName +'-DailyDeaths')
+    plt.savefig(FIGUREPATH + 'dailyDeaths/' + region +'-DailyDeaths')
     plt.close('all')
 
 
     #Infections Estimates:
     casesColor = 'tab:blue'
     yygColor = 'tab:green'
-    plt.title(stateName+': Estimated Infections')
+    plt.title(region+': Estimated Infections')
     plt.xlabel('Date')
     plt.ylabel('Daily Cases')
     plt.scatter(state.index,state['positive'], color=casesColor, s=1, alpha=0.5)
@@ -235,7 +260,7 @@ for stateName in regionList:
     plt.plot(state.index,state['infFromCasesYYGEst'], color=yygColor, label = 'estimated infections (from cases)')
     plt.grid(True)
     plt.legend()
-    fileName=FIGUREPATH + 'estimatedInfections/' + stateName +'-EstimatedInfections'
+    fileName=FIGUREPATH + 'estimatedInfections/' + region +'-EstimatedInfections'
     plt.savefig(fileName)
     plt.close('all')
     f=open(fileName+'.txt', "w")
@@ -243,6 +268,15 @@ for stateName in regionList:
     f.write(description)
     f.close()
     plt.close('all')
+
+
+    #RT.LIVE code...
+    if includeRT:
+        RTPATH=FIGUREPATH+'rt_live_code_figs/'
+        print("running rt.live code on region "+region+" and path "+RTPATH)
+
+        os.system('./runRTLive.py '+region+' '+ RTPATH) 
+
 
 
 #matplotlib filling and shading regions https://matplotlib.org/3.1.1/gallery/lines_bars_and_markers/fill_between_demo.html
