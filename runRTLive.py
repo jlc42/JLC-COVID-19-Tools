@@ -52,7 +52,8 @@ gm.sample()
 result = summarize_inference_data(gm.inference_data)
 
 
-#make cases plot
+#make cases plots and output files
+
 fig, ax = plt.subplots(figsize=(10,5))
 result.test_adjusted_positive.plot(c="g", label="Test-adjusted")
 result.test_adjusted_positive_raw.plot(c="g", alpha=.5, label="Test-adjusted (raw)", style="--")
@@ -60,15 +61,23 @@ result.infections.plot(c="b", label="Implied Infections")
 gm.observed.positive.plot(c='r', alpha=.7, label="Reported Positives")
 fig.set_facecolor('w')
 ax.legend()
-ax.set_title(f"{region} rtLive Inferred Cases and Infections")
+ax.set_title(f"{region} rt.Live Inferred Cases and Infections")
 ax.grid(True)
 fig.tight_layout(pad=2)
-plt.savefig(fname=outputPath+region+"_cases.png")
+fileName=outputPath+region+"_cases"
+plt.savefig(fname=fileName + ".png")
+f=open(fileName+'.txt', "w")
+description = """This figure is from the results of a run of the algorithm proposed by https://rt.live. While it adjusts for testing rates, we believe that it does so too aggressively. We are currently working on our own estimate for rt, and hope to be using that instead shortly."""
+f.write(description)
+f.close()
+
+
+
 
 
 fig, ax = plt.subplots(figsize=(10,5))
 
-ax.set_title(f"{region} rtLive Algorithm Inferred $R_t$")
+ax.set_title(f"{region} rt.Live Algorithm Inferred $R_t$")
 samples = gm.trace['r_t']
 x=result.index
 cmap = plt.get_cmap("Reds")
@@ -89,7 +98,20 @@ fig.set_facecolor('w')
 ax.grid(True)
 fig.tight_layout(pad=2)
 
-plt.savefig(fname=outputPath+region+"_rt.png")
+fileName=outputPath+region+'_rt'
+
+plt.savefig(fname=fileName+".png")
+
+f=open(fileName+'.txt', "w")
+description = """This figure is from the results of a run of the algorithm proposed by https://rt.live. While it adjusts for testing rates, we believe that it does so too aggressively. We are currently working on our own estimate for rt, and hope to be using that instead shortly."""
+f.write(description)
+f.close()
+
+
+f=open(fileName+'.csv', "w")
+description = str(float(result["lower_80"].last('1D'))) + ',' + str(float(result["mean"].last('1D')))+',' + str(float(result["upper_80"].last('1D')))
+f.write(description)
+f.close()
 
 
 
