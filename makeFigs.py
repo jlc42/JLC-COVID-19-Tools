@@ -34,6 +34,11 @@ else:
 regionOption = regionOption.upper()
 print("running with region option "+regionOption)
 
+
+
+
+
+
 if option == '-a':
     includeRT=True
     print("including rt runs")
@@ -138,9 +143,37 @@ rawStateData=get_raw_covidtracking_data()
 dataState = process_covidtracking_data(rawStateData,run_date)
 rawUSData = get_raw_UScovidtracking_data()
 dataUS = processUScovidtracking_data(rawUSData,run_date=pd.Timestamp.today()-pd.Timedelta(days=1))
-
-
 data=dataUS.append(dataState)
+
+
+
+dataRegionList=data.index.get_level_values(0).drop_duplicates()
+#Add Population Data to the Data Frame Data. 
+popDf=pd.read_csv('COVID_Data/regionPopulation.csv',index_col='region')
+for region in dataRegionList:
+    data.loc[region,"population"]=popDf.loc[region,"population"]
+
+
+
+
+#Calculate Other Parameters of Interest
+for regionName in dataRegionList:
+    #region['dailyNewCases-7DayAvg'] = region["casesDaily"].rolling(window=7).mean()
+    data.loc[idx[regionName, :], 'dailyNewCases-7DayAvg'] = data.loc[idx[regionName, :], "casesDaily"].rolling(window=7).mean()
+    #region['dailyNewTests-7DayAvg'] = region["testsDaily"].rolling(window=7).mean()
+    data.loc[idx[regionName, :], 'dailyNewTests-7DayAvg'] = data.loc[idx[regionName, :],"testsDaily"].rolling(window=7).mean()
+    #region['percentVTPositive'] = region['dailyNewCases-7DayAvg']/region['dailyNewTests-7DayAvg']
+    data.loc[idx[regionName, :], 'percentVTPositive'] = data.loc[idx[regionName, :],'dailyNewCases-7DayAvg']/data.loc[idx[regionName, :], 'dailyNewTests-7DayAvg']
+    #region['dailyDeaths-7DayAvg'] = region['deathsDaily'].rolling(window=7).mean()
+    data.loc[idx[regionName, :], 'dailyDeaths-7DayAvg'] = data.loc[idx[regionName, :], 'deathsDaily'].rolling(window=7).mean()
+    #region['infFromCasesYYGEst'] = region['dailyNewCases-7DayAvg']*(16*(pow(region['percentVTPositive'],0.5))+2.5)
+    data.loc[idx[regionName, :], 'infFromCasesYYGEst'] = data.loc[idx[regionName, :], 'dailyNewCases-7DayAvg']*(16*(pow(data.loc[idx[regionName,:], 'percentVTPositive'],0.5))+2.5)
+
+
+
+
+
+
 
 
 
@@ -160,14 +193,28 @@ deathsColor = 'tab:red'
 testsColor = 'tab:blue'
 
 
-regionList=data.index.get_level_values(0).drop_duplicates()
-for region in regionList:
+
+if regionOption=='ALL':
+    regionList=dataRegionList
+elif regionOption == 'ALLUS':
+    regionList=['USA', 'AK', 'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA',
+       'HI', 'IA', 'ID', 'IL', 'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME', 'MI',
+       'MN', 'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 'NH', 'NJ', 'NM', 'NV', 'NY',
+       'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VA', 'VT',
+       'WA', 'WI', 'WV', 'WY']
+else: 
+    regionList=[regionOption]
+
+
+
+for regionName in regionList:
     #print("should I run for "+region)
-    if (regionOption!=region) and (regionOption != 'ALL'):
-        #print("no")
-        continue; 
-    print("Generating Figures for "+region)
-    state=data.loc[region].copy(deep=True)
+    print("Generating Figures for "+regionName)
+    if not (regionName in dataRegionList):
+        print("don't have data for region "+regionName)
+        continue
+
+    state=data.loc[regionName].copy(deep=True)
     
     #Calculate Values of Use for later:
     state['dailyNewCases-7DayAvg'] = state["casesDaily"].rolling(window=7).mean()
@@ -184,7 +231,7 @@ for region in regionList:
     axis1Max=axis2Max/10
 
     fig, ax1 = plt.subplots()
-    plt.title(region+': Daily Cases and Tests')
+    plt.title(regionName+': Daily Cases and Tests')
     ax1.set_xlabel('Date')
     ax1.set_ylabel('Daily Cases', color=casesColor)
     ax1.plot(state['dailyNewCases-7DayAvg'], color=casesColor)
@@ -203,7 +250,7 @@ for region in regionList:
     fig.tight_layout(pad=2)  # otherwise the right y-label is slightly clipped
     plt.scatter(state.index,state['testsDaily'], color=color, s=1, alpha=0.5)
     
-    plt.savefig(FIGUREPATH + 'casesNTests/' + region +'-DailyCasesAndTests')
+    plt.savefig(FIGUREPATH + 'casesNTests/' + regionName +'-DailyCasesAndTests')
     plt.close('all')
 
     #%Positive
@@ -212,38 +259,48 @@ for region in regionList:
     ax.yaxis.set_major_formatter(PercentFormatter(xmax=1,decimals=0))
     ax.grid(True)
 
-    plt.title(region+': Percent Viral Tests Positive')
+    plt.title(regionName+': Percent Viral Tests Positive')
     plt.xlabel('Date')
     plt.ylabel('% of Tests Positive', color=color)
     plt.ylim(0,.3)
     plt.tight_layout(pad=2)
 
-    plt.savefig(FIGUREPATH + 'percentViralTestsPositive/' + region +'-PercentViralTestsPositive')
+    plt.savefig(FIGUREPATH + 'percentViralTestsPositive/' + regionName +'-PercentViralTestsPositive')
     plt.close('all')
 
+
+    #################################
     #Daily Deaths
+    #################################
+    fileName=FIGUREPATH+'dailyDeaths/' + regionName +'-DailyDeaths'
     color = 'tab:red'
     yAxisMax=state['dailyDeaths-7DayAvg'].max()
     yAxisMax=math.ceil(yAxisMax*1.3)
-
-
+    
 
     ax = state['dailyDeaths-7DayAvg'].plot(color=color)
     plt.scatter(state.index,state['deathsDaily'], color=color, s=1, alpha=0.5)
     ax.grid(True)
     ax.set_ylim(0,yAxisMax)
     
-    plt.title(region+': Daily Deaths')
+    plt.title(regionName+': Daily Deaths')
     plt.xlabel('Date')
     plt.ylabel('Daily Deaths', color=color)
     plt.tight_layout(pad=2)
     
-    plt.savefig(FIGUREPATH + 'dailyDeaths/' + region +'-DailyDeaths')
+    plt.savefig(fileName)
+    f=open(fileName+'.txt', "w")
+    description = "The number of daily deaths in "+regionName+"."
+    f.write(description)
+    f.close()
+
     plt.close('all')
 
 
+    #################################
     #Infections Estimates:
-    plt.title(region+': Estimated Infections')
+    #################################
+    plt.title(regionName+': Estimated Infections')
     plt.xlabel('Date')
     plt.ylabel('Daily Cases')
     plt.scatter(state.index,state['casesDaily'], color=casesColor, s=1, alpha=0.5)
@@ -252,7 +309,7 @@ for region in regionList:
     plt.plot(state.index,state['infFromCasesYYGEst'], color=yygColor, label = 'estimated infections (from cases)')
     plt.grid(True)
     plt.legend()
-    fileName=FIGUREPATH + 'estimatedInfections/' + region +'-EstimatedInfections'
+    fileName=FIGUREPATH + 'estimatedInfections/' + regionName +'-EstimatedInfections'
     plt.savefig(fileName)
     plt.close('all')
     f=open(fileName+'.txt', "w")
@@ -265,9 +322,24 @@ for region in regionList:
     #RT.LIVE code...
     if includeRT:
         RTPATH=FIGUREPATH+'rt_live_code_figs/'
-        print("running rt.live code on region "+region+" and path "+RTPATH)
+        print("running rt.live code on region "+regionName+" and path "+RTPATH)
 
-        os.system('./runRTLive.py '+region+' '+ RTPATH) 
+        os.system('./runRTLive.py '+regionName+' '+ RTPATH) 
+
+
+
+#Now I need to gather all the csv into a single file:
+masterRt=pd.DataFrame(columns=['Lower 80','Mean','Upper 80'])
+for fileName in os.listdir(path='../jlc42.github.io/figs/rt_live_code_figs/'):
+    if (fileName != 'masterRt.csv') and ('.csv' in fileName):
+        new=pd.read_csv('../jlc42.github.io/figs/rt_live_code_figs/'+fileName, header=None)
+        new=new.rename(columns={0:'Lower 80',1:'Mean',2:'Upper 80'})
+        newName=fileName.split('_')[0]
+        new=new.rename(index={0:newName})
+        masterRt=masterRt.append(new)
+
+masterRt=masterRt.sort_index()
+masterRt.to_csv('../jlc42.github.io/figs/rt_live_code_figs/masterRt.csv')
 
 
 
@@ -282,36 +354,4 @@ for region in regionList:
 
 
 
-
-
-"""
-
-nm=data.loc['NM']
-nm['DailyNewCases-7DayAvg'] = nm.iloc[:,0].rolling(window=7).mean()
-nm['DailyNewTests-7DayAvg'] = nm.iloc[:,1].rolling(window=7).mean()
-fig, ax1 = plt.subplots()
-color = 'tab:orange'
-ax1.set_xlabel('Date')
-ax1.set_ylabel('Daily Cases', color=color)
-ax1.plot(nm['DailyNewCases-7DayAvg'], color=color)
-ax1.tick_params(axis='y', labelcolor=color)
-ax1.set_ylim(0,1200)
-plt.scatter(nm.index,nm['positive'], color=color, s=1, alpha=0.5)
-
-
-ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
-
-color = 'tab:blue'
-ax2.set_ylabel('Daily Tests', color=color)  # we already handled the x-label with ax1
-ax2.plot(nm['DailyNewTests-7DayAvg'], color=color)
-ax2.tick_params(axis='y', labelcolor=color)
-ax2.set_ylim(0,12000)
-
-fig.tight_layout(pad=1.5)  # otherwise the right y-label is slightly clipped
-plt.title('NM: Daily Cases and Tests')
-plt.scatter(nm.index,nm['total'], color=color, s=1, alpha=0.5)
-plt.savefig('NM: Daily Cases and Tests')
-plt.show()
-
-"""
 
