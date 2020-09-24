@@ -31,7 +31,9 @@ def processUScovidtracking_data(data: pd.DataFrame, run_date: pd.Timestamp):
     data["region"]='USA'
     #data = data.rename(columns={"state": "region"})
     data["date"] = pd.to_datetime(data["date"], format="%Y%m%d")
+    data['total'] = data['positive']+data['negative']
     data = data.set_index(["region", "date"]).sort_index()
+    data['total']=data['positive']+data['negative']
     data = data[["positive", "total","death","deathIncrease"]]
     data = data.rename(columns={"positive": "casesCumulative"})
     data = data.rename(columns={"total": "testsCumulative"})
@@ -126,16 +128,18 @@ def getMasterCovidDataFromOnlineSources():
 
     #Calculate Other Parameters of Interest
     for regionName in dataRegionList:
-        #region['dailyNewCases-7DayAvg'] = region["casesDaily"].rolling(window=7).mean()
+        #dailyCases
         data.loc[idx[regionName, :], 'dailyNewCases-7DayAvg'] = data.loc[idx[regionName, :], "casesDaily"].rolling(window=7).mean()
-        #region['dailyNewTests-7DayAvg'] = region["testsDaily"].rolling(window=7).mean()
+        #dailyTests
         data.loc[idx[regionName, :], 'dailyNewTests-7DayAvg'] = data.loc[idx[regionName, :],"testsDaily"].rolling(window=7).mean()
-        #region['percentVTPositive'] = region['dailyNewCases-7DayAvg']/region['dailyNewTests-7DayAvg']
+        #percent of Tests Positive
         data.loc[idx[regionName, :], 'percentVTPositive'] = data.loc[idx[regionName, :],'dailyNewCases-7DayAvg']/data.loc[idx[regionName, :], 'dailyNewTests-7DayAvg']
-        #region['dailyDeaths-7DayAvg'] = region['deathsDaily'].rolling(window=7).mean()
+        #daily Deaths
         data.loc[idx[regionName, :], 'dailyDeaths-7DayAvg'] = data.loc[idx[regionName, :], 'deathsDaily'].rolling(window=7).mean()
-        #region['infFromCasesYYGEst'] = region['dailyNewCases-7DayAvg']*(16*(pow(region['percentVTPositive'],0.5))+2.5)
+        #daily Infections
         data.loc[idx[regionName, :], 'infFromCasesYYGEst'] = data.loc[idx[regionName, :], 'dailyNewCases-7DayAvg']*(16*(pow(data.loc[idx[regionName,:], 'percentVTPositive'],0.5))+2.5)
+        #cumulative Infections
+        data.loc[idx[regionName, :], 'cumulativeInfectionsFromCasesYYG'] = data.loc[idx[regionName, :], 'infFromCasesYYGEst'].cumsum()
         #recovered
         data14Shift=data.loc[idx[regionName, :], 'casesCumulative'].shift(14)
         data32Shift=data.loc[idx[regionName, :], 'casesCumulative'].shift(14)
@@ -150,7 +154,7 @@ def getMasterCovidDataFromOnlineSources():
 
 if __name__=="__main__":
     casesColor = 'tab:orange'
-    yygColor = 'tab:green'
+    yygColor = 'tab:purple'
     deathsColor = 'tab:red'
     testsColor = 'tab:blue'
     recoveredColor = 'tab:green'
@@ -162,9 +166,11 @@ if __name__=="__main__":
     plt.title(regionName+': TestPlot')
     plt.xlabel('Date')
     plt.ylabel('CumulativeData')
-    plt.plot(masterData.loc[regionName]['recoveredCases'], color=recoveredColor)
-    plt.plot(masterData.loc[regionName]['casesCumulative'], color=casesColor)
-    plt.plot(masterData.loc[regionName]['activeCases'], color=casesColor)
+    plt.plot(masterData.loc[regionName]['recoveredCases'], color=recoveredColor,label='recovered')
+    plt.plot(masterData.loc[regionName]['casesCumulative'], color=casesColor, label = 'cumulativeCases')
+    plt.plot(masterData.loc[regionName]['activeCases'], color=casesColor, label = 'active Cases')
+    plt.plot(masterData.loc[regionName]['cumulativeInfectionsFromCasesYYG'], color=yygColor, label = 'Estimated Actual Cumulative Infections')
+    plt.plot(masterData.loc[regionName]['testsCumulative'], color=testsColor, label = 'cumulativeTests')
     #plt.scatter(state.index,state['dailyNewCases-7DayAvg'], color=casesColor)
     plt.grid(True)
     plt.legend()

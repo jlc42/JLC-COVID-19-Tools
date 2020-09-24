@@ -32,6 +32,7 @@ def processUScovidtracking_data(data: pd.DataFrame, run_date: pd.Timestamp):
     data["region"]='USA'
     #data = data.rename(columns={"state": "region"})
     data["date"] = pd.to_datetime(data["date"], format="%Y%m%d")
+    data['total']=data['positive']+data['negative']
     data = data.set_index(["region", "date"]).sort_index()
     data = data[["positive", "total"]]
     # Now work with daily counts
