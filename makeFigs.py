@@ -15,7 +15,11 @@ from rt_live_covid_model.covid.data_us import get_raw_covidtracking_data
 import os
 import math
 import sys
+import dataHandler as dh
 idx = pd.IndexSlice
+
+
+FIGUREPATH="../jlc42.github.io/figs/"
 
 
 
@@ -34,11 +38,6 @@ else:
 regionOption = regionOption.upper()
 print("running with region option "+regionOption)
 
-
-
-
-
-
 if option == '-a':
     includeRT=True
     print("including rt runs")
@@ -47,90 +46,6 @@ else:
     includeRT=False
 
 
-def get_raw_UScovidtracking_data():
-    """ Gets the current daily CSV from COVIDTracking for the US as a whole"""
-    url = "https://covidtracking.com/api/v1/us/daily.csv"
-    #url = "https://covidtracking.com/api/v1/states/daily.csv"
-    data = pd.read_csv(url)
-    return data
-
-
-def processUScovidtracking_data(data: pd.DataFrame, run_date: pd.Timestamp):
-    """ Processes raw COVIDTracking data to be in a form for the GenerativeModel.
-        In many cases, we need to correct data errors or obvious outliers."""
-    data["region"]='USA'
-    #data = data.rename(columns={"state": "region"})
-    data["date"] = pd.to_datetime(data["date"], format="%Y%m%d")
-    data = data.set_index(["region", "date"]).sort_index()
-    data = data[["positive", "total","death","deathIncrease"]]
-    data = data.rename(columns={"positive": "casesCumulative"})
-    data = data.rename(columns={"total": "testsCumulative"})
-    data = data.rename(columns={"death": "deathsCumulative"})
-
-
-    # Now work with daily counts
-    #data = data.diff().dropna().clip(0, None).sort_index()
-    data["casesDaily"]=data["casesCumulative"].diff().dropna().clip(0,None)
-    data["testsDaily"]=data["testsCumulative"].diff().dropna().clip(0,None)
-    data = data.rename(columns={"deathIncrease": "deathsDaily"})
-
-    #return data.loc[idx[:, :(run_date - pd.DateOffset(1))], ["positive", "total", "death","deathIncrease"]]
-    return data
-
-
-
-
-
-
-
-
-def process_covidtracking_data(data: pd.DataFrame, run_date: pd.Timestamp):
-    """ Processes raw COVIDTracking data to be in a form for the GenerativeModel.
-        In many cases, we need to correct data errors or obvious outliers."""
-    data = data.rename(columns={"state": "region"})
-    data["date"] = pd.to_datetime(data["date"], format="%Y%m%d")
-    data = data.set_index(["region", "date"]).sort_index()
-    data = data[["positive", "total", "death","deathIncrease"]]
-    data = data.rename(columns={"positive": "casesCumulative"})
-    data = data.rename(columns={"total": "testsCumulative"})
-    data = data.rename(columns={"death": "deathsCumulative"})
-    data = data.sort_index()
-
-    # Too little data or unreliable reporting in the data source.
-    data = data.drop(["MP", "GU", "AS", "PR", "VI"])
-
-    # On Jun 5 Covidtracking started counting probable cases too
-    # which increases the amount by 5014.
-    # https://covidtracking.com/screenshots/MI/MI-20200605-184320.png
-    data.loc[idx["MI", pd.Timestamp("2020-06-05") :], "casesCumulative"] -= 5014
-
-    # From CT: On June 19th, LDH removed 1666 duplicate and non resident cases
-    # after implementing a new de-duplicaton process.
-    data.loc[idx["LA", pd.Timestamp("2020-06-19") :], "casesCumulative"] += 1666
-
-    # Now work with daily counts
-    data["casesDaily"]=data["casesCumulative"].diff().dropna().clip(0,None)
-    data["testsDaily"]=data["testsCumulative"].diff().dropna().clip(0,None)
-    data = data.rename(columns={"deathIncrease": "deathsDaily"})
-
-
-
-
-    #data = data.diff().dropna().clip(0, None).sort_index()
-    
-    # Michigan missed 6/18 totals and lumped them into 6/19 so we've
-    # divided the totals in two and equally distributed to both days.
-    data.loc[idx["MI", pd.Timestamp("2020-06-18")], "testsDaily"] = 14871
-    data.loc[idx["MI", pd.Timestamp("2020-06-19")], "testsDaily"] = 14871
-    
-    # Two days of no new data then lumped sum on third day with lack of new total tests
-    data.loc[idx["OR", pd.Timestamp("2020-06-26") : pd.Timestamp("2020-06-28")], 'casesDaily'] = 174
-    data.loc[idx["OR", pd.Timestamp("2020-06-26") : pd.Timestamp("2020-06-28")], 'testsDaily'] = 3296
-    
-    # At the real time of `run_date`, the data for `run_date` is not yet available!
-    # Cutting it away is important for backtesting!
-    return data
-    #return data.loc[idx[:, :(run_date - pd.DateOffset(1))], ["positive", "total", "death","deathIncrease"]]
 
 def roundup(x):
     return int(math.ceil(x /100.0)) * 100
@@ -138,59 +53,25 @@ def roundup(x):
 run_date=pd.Timestamp.today()-pd.Timedelta(days=1)
 
 #df = get_and_process_covidtracking_data(run_date=pd.Timestamp.today()-pd.Timedelta(days=1))
-print("getting data")
-rawStateData=get_raw_covidtracking_data()
-dataState = process_covidtracking_data(rawStateData,run_date)
-rawUSData = get_raw_UScovidtracking_data()
-dataUS = processUScovidtracking_data(rawUSData,run_date=pd.Timestamp.today()-pd.Timedelta(days=1))
-data=dataUS.append(dataState)
-
-
+#print("getting data")
+data=dh.getMasterCovidDataFromOnlineSources()
 
 dataRegionList=data.index.get_level_values(0).drop_duplicates()
-#Add Population Data to the Data Frame Data. 
-popDf=pd.read_csv('COVID_Data/regionPopulation.csv',index_col='region')
-for region in dataRegionList:
-    data.loc[region,"population"]=popDf.loc[region,"population"]
 
-
-
-
-#Calculate Other Parameters of Interest
-for regionName in dataRegionList:
-    #region['dailyNewCases-7DayAvg'] = region["casesDaily"].rolling(window=7).mean()
-    data.loc[idx[regionName, :], 'dailyNewCases-7DayAvg'] = data.loc[idx[regionName, :], "casesDaily"].rolling(window=7).mean()
-    #region['dailyNewTests-7DayAvg'] = region["testsDaily"].rolling(window=7).mean()
-    data.loc[idx[regionName, :], 'dailyNewTests-7DayAvg'] = data.loc[idx[regionName, :],"testsDaily"].rolling(window=7).mean()
-    #region['percentVTPositive'] = region['dailyNewCases-7DayAvg']/region['dailyNewTests-7DayAvg']
-    data.loc[idx[regionName, :], 'percentVTPositive'] = data.loc[idx[regionName, :],'dailyNewCases-7DayAvg']/data.loc[idx[regionName, :], 'dailyNewTests-7DayAvg']
-    #region['dailyDeaths-7DayAvg'] = region['deathsDaily'].rolling(window=7).mean()
-    data.loc[idx[regionName, :], 'dailyDeaths-7DayAvg'] = data.loc[idx[regionName, :], 'deathsDaily'].rolling(window=7).mean()
-    #region['infFromCasesYYGEst'] = region['dailyNewCases-7DayAvg']*(16*(pow(region['percentVTPositive'],0.5))+2.5)
-    data.loc[idx[regionName, :], 'infFromCasesYYGEst'] = data.loc[idx[regionName, :], 'dailyNewCases-7DayAvg']*(16*(pow(data.loc[idx[regionName,:], 'percentVTPositive'],0.5))+2.5)
-
-
-
-
-
-
-
-
-
-
-
-FIGUREPATH="../jlc42.github.io/figs/"
 
 os.system('mkdir '+FIGUREPATH+'casesNTests')
 os.system('mkdir '+FIGUREPATH+'percentViralTestsPositive')
 os.system('mkdir '+FIGUREPATH+'dailyDeaths')
 os.system('mkdir '+FIGUREPATH+'estimatedInfections')
+os.system('mkdir '+FIGUREPATH+'PercentActive')
+os.system('mkdir '+FIGUREPATH+'PercentInfected')
 
 ###Generate figures for each State:
 casesColor = 'tab:orange'
-yygColor = 'tab:green'
+yygColor = 'xkcd:aqua green'
 deathsColor = 'tab:red'
 testsColor = 'tab:blue'
+recoveredColor = 'tab:green'
 
 
 
@@ -217,11 +98,11 @@ for regionName in regionList:
     state=data.loc[regionName].copy(deep=True)
     
     #Calculate Values of Use for later:
-    state['dailyNewCases-7DayAvg'] = state["casesDaily"].rolling(window=7).mean()
-    state['dailyNewTests-7DayAvg'] = state["testsDaily"].rolling(window=7).mean()
-    state['percentVTPositive'] = state['dailyNewCases-7DayAvg']/state['dailyNewTests-7DayAvg']
-    state['dailyDeaths-7DayAvg'] = state['deathsDaily'].rolling(window=7).mean()
-    state['infFromCasesYYGEst'] = state['dailyNewCases-7DayAvg']*(16*(pow(state['percentVTPositive'],0.5))+2.5)
+    #state['dailyNewCases-7DayAvg'] = state["casesDaily"].rolling(window=7).mean()
+    #state['dailyNewTests-7DayAvg'] = state["testsDaily"].rolling(window=7).mean()
+    #state['percentVTPositive'] = state['dailyNewCases-7DayAvg']/state['dailyNewTests-7DayAvg']
+    #state['dailyDeaths-7DayAvg'] = state['deathsDaily'].rolling(window=7).mean()
+    #state['infFromCasesYYGEst'] = state['dailyNewCases-7DayAvg']*(16*(pow(state['percentVTPositive'],0.5))+2.5)
 
     
     #CasesAndTests
@@ -302,11 +183,11 @@ for regionName in regionList:
     #################################
     plt.title(regionName+': Estimated Infections')
     plt.xlabel('Date')
-    plt.ylabel('Daily Cases')
+    plt.ylabel('Daily Cases or Infections')
     plt.scatter(state.index,state['casesDaily'], color=casesColor, s=1, alpha=0.5)
-    plt.plot(state.index,state['dailyNewCases-7DayAvg'], color=casesColor, label = 'confirmed cases')
+    plt.plot(state.index,state['dailyNewCases-7DayAvg'], color=casesColor, label = 'Reported Daily Confirmed Cases')
     #plt.scatter(state.index,state['dailyNewCases-7DayAvg'], color=casesColor)
-    plt.plot(state.index,state['infFromCasesYYGEst'], color=yygColor, label = 'estimated infections (from cases)')
+    plt.plot(state.index,state['infFromCasesYYGEst'], color=yygColor, label = 'Estimated Actual Daily Infections')
     plt.grid(True)
     plt.legend()
     fileName=FIGUREPATH + 'estimatedInfections/' + regionName +'-EstimatedInfections'
@@ -316,7 +197,69 @@ for regionName in regionList:
     description = """The true number of infections is far larger than the number of officially reported cases. One way to estimate the true number of infections from reported cases and the percent of tests that are positive was proposed by Youyang Gu: true-new-daily-infections = daily-confirmed-cases * (16 * (positivity-rate)^(0.5) + 2.5). (see: https://covid19-projections.com/estimating-true-infections/)"""
     f.write(description)
     f.close()
+
+    #####################################
+    #ACTIVE CASES AND INFECTION ESTIMATES
+    #####################################
+    FIGURETYPENAME='PercentActive'
+    fileName=FIGUREPATH + FIGURETYPENAME + '/' + regionName +'-'+FIGURETYPENAME
+    fig, ax1 = plt.subplots()
+    plt.title(regionName+': Percent Active')
+    ax1.set_xlabel('Date')
+    ax1.set_ylabel('Percent Active')
+    ax1.plot(data.loc[regionName]['activeCasesPercent'], color=casesColor, label = 'Active Reported Cases')
+    ax1.plot(data.loc[regionName]['activeInfectionsPercent'], color=yygColor, label = 'Active Actual Infections (Estimated)')
+    #plt.plot(masterData.loc[regionName]['cumulativeInfectionsFromCasesYYG'], color=yygColor, label = 'Estimated Actual Cumulative Infections')
+    #plt.plot(masterData.loc[regionName]['testsCumulative'], color=testsColor, label = 'Cumulative Tests')
+    #plt.scatter(state.index,state['dailyNewCases-7DayAvg'], color=casesColor)
+    ax1.yaxis.set_major_formatter(PercentFormatter(1))
+    ax1.set_ylim(bottom=0)
+    plt.grid(True)
+    plt.legend()
+    
+    plt.savefig(fileName)
     plt.close('all')
+    f=open(fileName+'.txt', "w")
+    description = """The true number of infections is far larger than the number of officially reported cases. Using the population size, estimated recoveries, and estimated infections it's possible to compute an estimate of the population that are actively infected in a given location. This is a useful estimate of individual risk, because it gives you an idea of how likely it is that you will interact with a person who is actively contagious. If 2% of the population in your region are actively infected, then in a randomly chosen group of 100 people, on average, 2 of them will be contageous."""
+    f.write(description)
+    f.close()
+    
+    #Make CSV for color coding map
+    f=open(fileName+'.csv', "w")
+    percentInfectedToday=data.loc['USA']['activeInfectionsPercent'].loc[run_date.strftime("%Y-%m-%d")]
+    f.write(str(percentInfectedToday))
+    f.close()
+    
+
+
+    #####################################
+    #Cumulative Percent Cases and INFECTION ESTIMATES
+    #####################################
+    FIGURETYPENAME='PercentInfected'
+    fileName=FIGUREPATH + FIGURETYPENAME + '/' + regionName +'-'+FIGURETYPENAME
+    fig, ax1 = plt.subplots()
+    plt.title(regionName+': Cumulative Percent of the Population')
+    ax1.set_xlabel('Date')
+    ax1.set_ylabel('Percent of the Population')
+    ax1.plot(data.loc[regionName]['cumulativeCasesPercent'], color=casesColor, label = 'Percent Reported Confirmed Cases')
+    ax1.plot(data.loc[regionName]['cumulativeInfectedPercent'], color=yygColor, label = 'Percent Actually Infected (Estimated)')
+    ax1.plot(data.loc[regionName]['cumulativeRecoveredInfectionsPercent'], color=recoveredColor, label = 'Percent Actually Recovered (Estimated)') 
+    ax1.yaxis.set_major_formatter(PercentFormatter(1))
+    ax1.set_ylim(bottom=0)
+    plt.grid(True)
+    plt.legend()
+    
+    plt.savefig(fileName)
+    plt.close('all')
+    f=open(fileName+'.txt', "w")
+    description = """The true number of infections is far larger than the number of officially reported cases. One way to estimate the true number of infections from reported cases and the percent of tests that are positive was proposed by Youyang Gu: true-new-daily-infections = daily-confirmed-cases * (16 * (positivity-rate)^(0.5) + 2.5). (see: https://covid19-projections.com/estimating-true-infections/). The cumulative percent of the population that has been infected so far is an important first step towards extimating the fraction of the population that will be immune in a given location.""" 
+    f.write(description)
+    f.close()
+ 
+
+
+
+
 
 
     #RT.LIVE code...
@@ -328,7 +271,7 @@ for regionName in regionList:
 
 
 
-#Now I need to gather all the csv into a single file:
+#Now I need to gather all the rt csv files into a single file:
 masterRt=pd.DataFrame(columns=['Lower 80','Mean','Upper 80'])
 for fileName in os.listdir(path='../jlc42.github.io/figs/rt_live_code_figs/'):
     if (fileName != 'masterRt.csv') and ('.csv' in fileName):
@@ -341,6 +284,19 @@ for fileName in os.listdir(path='../jlc42.github.io/figs/rt_live_code_figs/'):
 masterRt=masterRt.sort_index()
 masterRt.to_csv('../jlc42.github.io/figs/rt_live_code_figs/masterRt.csv')
 
+#Now I need to gather all the percent Infected csv files into a single file:
+masterPercentInfected=pd.DataFrame(columns=['Mean'])
+activePath=FIGUREPATH+'PercentActive'
+for fileName in os.listdir(path=activePath):
+    if (fileName != 'masterPercentInfected.csv') and ('.csv' in fileName):
+        new=pd.read_csv(activePath + '/' + fileName, header=None)
+        new=new.rename(columns={0:'Mean'})
+        newName=fileName.split('_')[0]
+        new=new.rename(index={0:newName})
+        masterPercentInfected=masterPercentInfected.append(new)
+
+masterPercentInfected=masterPercentInfected.sort_index()
+masterPercentInfected.to_csv(activePath + '/masterPercentInfected.csv')
 
 
 #matplotlib filling and shading regions https://matplotlib.org/3.1.1/gallery/lines_bars_and_markers/fill_between_demo.html
