@@ -226,7 +226,7 @@ for regionName in regionList:
     
     #Make CSV for color coding map
     f=open(fileName+'.csv', "w")
-    percentInfectedToday=data.loc['USA']['activeInfectionsPercent'].loc[run_date.strftime("%Y-%m-%d")]
+    percentInfectedToday=data.loc[regionName]['activeInfectionsPercent'].loc[run_date.strftime("%Y-%m-%d")]
     f.write(str(percentInfectedToday))
     f.close()
     
